@@ -141,9 +141,10 @@ if btn_calcular:
     valor_pgbl = np.zeros(len(timeline))
     valor_fundo_lp = np.zeros(len(timeline))
 
+    # ← Ajuste AQUI: usar restituição de 27,5% sobre todo o aporte anual
     restit_por_ano = {}
     for ano_int in range(int(anos_aporte)):
-        aliquota_marginal = calcula_irpf_anual(renda_bruta)[1] / 100.0
+        aliquota_marginal = 0.275
         imposto_economizado = valor_aporte_anual * aliquota_marginal
         restit_por_ano[ano_int + 1] = imposto_economizado
 
@@ -163,11 +164,13 @@ if btn_calcular:
         valor_pgbl[idx] = valor_pgbl[idx - 1] * (1 + taxa_nominal / 100.0) ** dt
         valor_fundo_lp[idx] = valor_fundo_lp[idx - 1] * (1 + taxa_fundo / 100.0) ** dt
 
+        # a) aportes no PGBL
         mask = np.isclose(df_contribs["ano"], t, atol=1e-6)
         if mask.any():
             soma_aporte = df_contribs.loc[mask, "aporte"].sum()
             valor_pgbl[idx] += soma_aporte
 
+        # b) restituição de IR no início de cada ano inteiro
         ano_atual_int = int(np.floor(t))
         if abs(t - ano_atual_int) < 1e-6 and ano_atual_int in restit_por_ano:
             restit = restit_por_ano[ano_atual_int]
@@ -184,8 +187,8 @@ if btn_calcular:
             else:
                 valor_fundo_lp[idx] += restit
 
+        # c) come-cotas (aplicado apenas no fundo de longo prazo)
         mes_rel = (t * 12) % 12
-        # Aplicar come-cotas apenas no fundo de longo prazo, não no PGBL
         if abs(mes_rel - 4) < 1e-3 or abs(mes_rel - 10) < 1e-3:
             valor_fundo_lp[idx] = aplica_come_cotas(valor_fundo_lp[idx], taxa_fundo / 100.0, periodos=1)
 
@@ -210,12 +213,12 @@ if btn_calcular:
 
     st.subheader("Projeção de Resgate")
 
-    # Exibir valores para PGBL
+    # PGBL
     st.write(f"- Valor acumulado no PGBL (bruto): R$ {valor_final_pgbl:,.2f}")
     valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
     st.write(f"- Valor futuro no PGBL descontado da inflação: R$ {valor_real_pgbl:,.2f}")
 
-    # Exibir valores para Fundo LP (se houver saldo)
+    # Fundo LP
     if valor_final_fundo > 0:
         st.write(f"- Valor acumulado no Fundo LP (bruto): R$ {valor_final_fundo:,.2f}")
         valor_real_fundo = valor_final_fundo / ((1 + inflacao / 100.0) ** anos_aporte)
