@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1) Definições de funções (sempre antes de qualquer chamada no Streamlit UI)
+# 1) Funções auxiliares (devem vir antes de qualquer parte do Streamlit UI)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def calc_irpf_anual(renda_anual: float) -> float:
@@ -30,6 +30,7 @@ def calc_irpf_anual(renda_anual: float) -> float:
     ir = base * aliquota - deducao
     return max(ir, 0.0)
 
+
 def get_aliquota_regressiva(anos: int) -> float:
     """
     Retorna alíquota regressiva de IR para previdência, de acordo com anos completos.
@@ -47,6 +48,7 @@ def get_aliquota_regressiva(anos: int) -> float:
     else:
         return 0.10
 
+
 def simular_pgbl_fifo_com_outros(renda_anual, percentual_aporte, taxa_retorno, prazo_anos):
     """
     Simula aportes anuais em PGBL (até 12% da renda) e reinvestimento da economia de IR em 'outros'.
@@ -57,9 +59,9 @@ def simular_pgbl_fifo_com_outros(renda_anual, percentual_aporte, taxa_retorno, p
     ir_sem_pgbl = calc_irpf_anual(renda_anual)
     ir_base = ir_sem_pgbl
 
-    lotes_pgbl = []      # cada item: (ano_do_aporte, valor_aporte)
-    saldo_outros = 0.0   # acumulado do reinvestimento da economia
-    prev_economia = 0.0  # economia de IR do ano anterior
+    lotes_pgbl = []
+    saldo_outros = 0.0
+    prev_economia = 0.0
 
     for ano in range(1, int(prazo_anos) + 1):
         aporte_base = renda_anual * percentual_aporte
@@ -87,23 +89,23 @@ def simular_pgbl_fifo_com_outros(renda_anual, percentual_aporte, taxa_retorno, p
 
     return lotes_pgbl, saldo_outros
 
+
 def calcular_economia_total(renda_anual, percentual_aporte, taxa_retorno, prazo_anos):
     """
     Calcula a economia total de IR projetada ao longo de 'prazo_anos', considerando:
       1) Economia anual de IR = IR sem PGBL - IR com aporte
       2) Reinvestimento dessa economia em 'outros'
-      3) Na saída (apos 10 anos de cada lote de PGBL) tira-se IR a 10% sobre o valor futuro.
+      3) Na saída (após 10 anos de cada lote de PGBL) cobra-se IR a 10% sobre o valor futuro.
     Retorna:
-      - economia_total_bruta: soma de tudo que não foi pago de IR (inclui reinvestimentos)
-      - economia_total_liquida: valor líquido projetado após tributação na saída do PGBL
+      - economia_total_bruta: soma de todos os valores reinvestidos (antes de tributar o PGBL)
+      - economia_total_liquida: valor líquido que restaria após tributar cada lote PGBL a 10%
     """
     ir_sem_pgbl = calc_irpf_anual(renda_anual)
     ir_base = ir_sem_pgbl
 
     lotes_pgbl = []
     prev_economia = 0.0
-    # lista de tuplas para cada lote: (ano_do_aporte, valor_aporte, economia_do_ano)
-    historico_economia = []
+    historico_economia = []  # (ano, economia_ano)
 
     for ano in range(1, int(prazo_anos) + 1):
         aporte_base = renda_anual * percentual_aporte
@@ -126,30 +128,25 @@ def calcular_economia_total(renda_anual, percentual_aporte, taxa_retorno, prazo_
         historico_economia.append((ano, economia_ano))
         prev_economia = economia_ano
 
-    # Agora, calcular projeção do que foi economizado:
-    #   - Cada ano de economia reinvestido ao retorno 'taxa_retorno' até cada lote de PGBL sair
     economia_total_bruta = 0.0
     economia_total_liquida = 0.0
 
     for (ano_aporte, aporte) in lotes_pgbl:
         # Ano em que este lote completa 10 anos:
-        ano_saida = ano_aporte + 10 - 1  # se a contagem do ano do aporte = 1, +9 para ter 10 total
+        ano_saida = ano_aporte + 10 - 1
         if ano_saida > prazo_anos:
-            # Saída ocorreria depois do horizonte, mas incluiremos como se fosse ano N+...
             anos_para_saida = (prazo_anos - ano_aporte + 1) + (10 - (prazo_anos - ano_aporte + 1))
         else:
             anos_para_saida = 10
 
-        # Somar todas as economias de IR dos anos até ano_aporte (essas economias são
-        # reinvestidas em 'outros' até ano_saida):
+        # Reinvestir toda economia de IR gerada até o ano_aporte, até o ano_saida
         soma_economias_reinvestidas = 0.0
         for (ano_economia, econ_val) in historico_economia:
             if ano_economia <= ano_aporte:
-                # reinvestir econ_val por (ano_saida - ano_economia + 1) anos
                 periodo = ano_saida - ano_economia + 1
                 soma_economias_reinvestidas += econ_val * ((1 + taxa_retorno) ** periodo)
 
-        # Valor bruto futuro do lote de PGBL:
+        # Valor bruto futuro do lote de PGBL
         valor_futuro_lote = aporte * ((1 + taxa_retorno) ** anos_para_saida)
         aliquota_lote = get_aliquota_regressiva(anos_para_saida)
         valor_liquido_lote = valor_futuro_lote * (1 - aliquota_lote)
@@ -158,6 +155,7 @@ def calcular_economia_total(renda_anual, percentual_aporte, taxa_retorno, prazo_
         economia_total_liquida += (soma_economias_reinvestidas + valor_futuro_lote) * (1 - aliquota_lote)
 
     return round(economia_total_bruta, 2), round(economia_total_liquida, 2)
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 2) INÍCIO DA INTERFACE STREAMLIT
@@ -219,7 +217,6 @@ ir_com_escolha = calc_irpf_anual(renda_anual - deducao_escolhida)
 economia_12 = ir_sem_pgbl - ir_com_12
 economia_escolha = ir_sem_pgbl - ir_com_escolha
 
-# Mostra os métricos de IR imediatamente
 st.subheader("📊 Imposto de Renda e Economia Imediata")
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -227,9 +224,9 @@ with col1:
     st.metric(label="IR com PGBL a 12% (R$):", value=f"{ir_com_12:,.2f}")
 with col2:
     st.metric(label=f"IR com PGBL a {percentual_input*100:.1f}% (R$):", value=f"{ir_com_escolha:,.2f}")
-    st.metric(label="Economia de Imposto Ano 1 (R$):", value=f"{economia_escolha:,.2f}")
+    st.metric(label="Economia de IR Ano 1 (R$):", value=f"{economia_escolha:,.2f}")
 with col3:
-    st.metric(label="Economia de Imposto Ano-teto (12%) (R$):", value=f"{economia_12:,.2f}")
+    st.metric(label="Economia de IR Ano (teto 12%) (R$):", value=f"{economia_12:,.2f}")
     st.metric(label="Economia Percentual Escolhido (%)", value=f"{100 * economia_escolha / ir_sem_pgbl if ir_sem_pgbl>0 else 0:.2f}%")
 
 st.markdown("---")
@@ -238,7 +235,6 @@ st.markdown("---")
 # 4) Projeção de Evolução Ano a Ano (PGBL e Outros), com lotes FIFO
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Saldo inicial
 saldo_pgb = 0.0
 saldo_outros = 0.0
 prev_economia = 0.0
@@ -265,16 +261,13 @@ for ano in range(1, int(prazo_anos) + 1):
 
     aporte_pgbl = aporte_base + adicional_pgbl
 
-    # Atualiza saldos de PGBL e "Outros"
     if frequencia == "Anual":
         saldo_pgb = (saldo_pgb + aporte_pgbl) * (1 + taxa_retorno)
         saldo_outros = (saldo_outros + aporte_outros) * (1 + taxa_retorno)
     else:
-        # Capitalização mensal
         taxa_m = (1 + taxa_retorno)**(1/12) - 1
         aporte_mensal_pgb = aporte_pgbl / 12.0
         aporte_mensal_outros = aporte_outros / 12.0
-
         for _ in range(12):
             saldo_pgb = (saldo_pgb + aporte_mensal_pgb) * (1 + taxa_m)
             saldo_outros = (saldo_outros + aporte_mensal_outros) * (1 + taxa_m)
@@ -291,7 +284,6 @@ for ano in range(1, int(prazo_anos) + 1):
 
     prev_economia = economia_ano
 
-# Monta DataFrame para exibição
 df_evolucao = pd.DataFrame({
     "Ano": anos,
     "Aporte PGBL (R$)": lista_contrib_pgb,
@@ -312,7 +304,6 @@ st.dataframe(df_evolucao.style.format({
 
 st.subheader("📊 Gráficos de Evolução")
 st.line_chart(df_evolucao.set_index("Ano")[["Saldo PGBL (R$)", "Saldo Outros (R$)"]])
-st.line_chart(df_evolucao.set_index("Ano")[["Aporte PGBL (R$)", "Aporte Outros (R$)"]])
 st.line_chart(df_evolucao.set_index("Ano")[["Economia IR (R$)"]])
 
 st.markdown("---")
@@ -321,21 +312,19 @@ st.markdown("---")
 # 5) Projeção de Saques Lote a Lote (FIFO)
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.subheader("💰 Saques Anuais FIFO (Lote a Lote)")
+st.subheader("💰 Saques Anuais FIFO (Resgate ao Longo de M Anos)")
 
-# Pergunta: em quantos anos após N o usuário planeja fazer os saques periódicos?
 resgate_anos = st.number_input(
-    "Horizonte de Saque (anos) após fim de N:", min_value=1, max_value=50, value=5, step=1
+    "Em quantos anos você quer distribuir (esgotar) todos os valores PGBL elegíveis?",
+    min_value=1, max_value=50, value=5, step=1
 )
 
 if st.button("Calcular Saques FIFO"):
-    # Re-executar função para obter lotes
     lotes_pgbl, _ = simular_pgbl_fifo_com_outros(renda_anual, percentual_input, taxa_retorno, prazo_anos)
 
     retiradas = []
     used_lotes = set()
 
-    # Para cada ano de saque (do período N+1 até N+resgate_anos)
     for ano_saque in range(int(prazo_anos + 1), int(prazo_anos + 1 + resgate_anos)):
         bruto_retirado = 0.0
         detalhes = []
@@ -350,7 +339,7 @@ if st.button("Calcular Saques FIFO"):
                 used_lotes.add((ano_lote, valor_lote))
                 detalhes.append((ano_lote, idade, round(valor_futuro, 2)))
 
-        liquido_retirado = bruto_retirado * 0.90  # 10% IR
+        liquido_retirado = bruto_retirado * 0.90  # 10% de IR
         retiradas.append({
             "Ano de Saque": ano_saque,
             "Bruto Retirado (R$)": round(bruto_retirado, 2),
@@ -372,15 +361,21 @@ if st.button("Calcular Saques FIFO"):
 st.markdown("---")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6) Cálculo de Economia Total de IR (acumulada) – conceitual
+# 6) Economia Acumulada de IR (bruta e líquida) ao Final dos Aportes
 # ─────────────────────────────────────────────────────────────────────────────
 
-st.subheader("📈 Economia Total de IR (Projetada até Saída)")
+st.subheader("📈 Economia de IR Acumulada (Bruta e Líquida) ao Final dos Aportes")
 
-if st.button("Calcular Economia Total de IR"):
+if st.button("Calcular Economia de IR Acumulada"):
     econ_bruta, econ_liquida = calcular_economia_total(renda_anual, percentual_input, taxa_retorno, prazo_anos)
-    st.metric(label="Economia Total Bruta (R$):", value=f"{econ_bruta:,.2f}")
-    st.metric(label="Economia Total Líquida (R$):", value=f"{econ_liquida:,.2f}")
+    st.metric(
+        label="Economia de IR Bruta (total reinvestido de todas as economias anuais):",
+        value=f"{econ_bruta:,.2f}"
+    )
+    st.metric(
+        label="Economia de IR Líquida (após tributar cada lote PGBL a 10%):",
+        value=f"{econ_liquida:,.2f}"
+    )
 
 st.markdown("---")
 
@@ -397,22 +392,19 @@ inflacao = st.number_input(
 if st.button("Calcular Renda Perpétua Real"):
     lotes_pgbl, saldo_outros_iter = simular_pgbl_fifo_com_outros(renda_anual, percentual_input, taxa_retorno, prazo_anos)
 
-    # Determinar principal perpétuo PGBL (idade >= 10)
     principal_perp_pgb = 0.0
     for (ano_lote, valor_lote) in lotes_pgbl:
         idade = prazo_anos - ano_lote + 1
         if idade >= 10:
-            valor_principal = valor_lote * (1 + taxa_retorno) ** 10
+            valor_principal = valor_lote * ((1 + taxa_retorno) ** 10)
             principal_perp_pgb += valor_principal
 
-    # Renda nominal perpétua
     renda_nominal_pgb_bruto = principal_perp_pgb * taxa_retorno
     renda_nominal_pgb_liquido = renda_nominal_pgb_bruto * (1 - 0.10)
 
     renda_nominal_outros_bruto = saldo_outros_iter * taxa_retorno
     renda_nominal_outros_liquido = renda_nominal_outros_bruto * (1 - 0.15)
 
-    # Fator de inflação acumulada até N
     fator_infl = (1 + inflacao) ** prazo_anos
 
     real_pgb_liquido = renda_nominal_pgb_liquido / fator_infl
