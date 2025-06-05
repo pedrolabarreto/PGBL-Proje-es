@@ -185,8 +185,8 @@ if btn_calcular:
                 valor_fundo_lp[idx] += restit
 
         mes_rel = (t * 12) % 12
+        # Aplicar come-cotas apenas no fundo de longo prazo, não no PGBL
         if abs(mes_rel - 4) < 1e-3 or abs(mes_rel - 10) < 1e-3:
-            valor_pgbl[idx] = aplica_come_cotas(valor_pgbl[idx], taxa_nominal / 100.0, periodos=1)
             valor_fundo_lp[idx] = aplica_come_cotas(valor_fundo_lp[idx], taxa_fundo / 100.0, periodos=1)
 
     df_evol = pd.DataFrame({
@@ -209,13 +209,14 @@ if btn_calcular:
 
     st.subheader("Projeção de Resgate")
     if modo_resgate == "Renda Vitalícia (mensal)":
-        valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
+        st.write(f"- Valor acumulado no PGBL (bruto): R$ {valor_final_pgbl:,.2f}")
         taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
+        valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
         renda_mensal = valor_real_pgbl * taxa_real / 12.0
-        st.write(f"- Valor acumulado nominal no PGBL: R$ {valor_final_pgbl:,.2f}")
         st.write(f"- Valor real (hoje) no PGBL: R$ {valor_real_pgbl:,.2f}")
         st.write(f"- Renda vitalícia mensal estimada (em R$ de hoje): R$ {renda_mensal:,.2f}")
     elif modo_resgate.startswith("Resgate Mensal"):
+        st.write(f"- Valor acumulado no PGBL (bruto): R$ {valor_final_pgbl:,.2f}")
         prazo_meses = anos_resgate * 12
         taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
         valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
@@ -224,12 +225,13 @@ if btn_calcular:
         else:
             j = (1 + taxa_real) ** (1 / 12) - 1
             saque_mensal = valor_real_pgbl * j / (1 - (1 + j) ** (-prazo_meses))
-        st.write(f"- Valor real acumulado no PGBL (hoje): R$ {valor_real_pgbl:,.2f}")
+        st.write(f"- Valor real (hoje) no PGBL: R$ {valor_real_pgbl:,.2f}")
         st.write(f"- Saque mensal constante por {anos_resgate} anos: R$ {saque_mensal:,.2f}")
     else:
+        st.write(f"- Valor acumulado no PGBL (bruto): R$ {valor_final_pgbl:,.2f}")
         valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
         saque_anual = valor_real_pgbl / anos_resgate
-        st.write(f"- Valor real acumulado no PGBL (hoje): R$ {valor_real_pgbl:,.2f}")
+        st.write(f"- Valor real (hoje) no PGBL: R$ {valor_real_pgbl:,.2f}")
         st.write(f"- Saque anual por {anos_resgate} anos: R$ {saque_anual:,.2f}")
         st.markdown(
             "_Observação: dependendo da ordem cronológica dos aportes, parte do capital resgatado poderá ter tempo de permanência menor que 10 anos, gerando alíquotas superiores a 10% no IR regressivo._"
