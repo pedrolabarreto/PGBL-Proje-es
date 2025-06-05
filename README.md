@@ -18,19 +18,24 @@ streamlit run app.py
 ## Como usar
 
 1. Preencha no painel:
-   - Renda Bruta Anual  
-   - Percentual de aporte em PGBL (0–12%)  
-   - Taxa de retorno esperada  
-   - Prazo de projeção (anos)  
-   - Inflação anual (para renda real)  
-   - Escolha frequência de aporte (Anual/Mensal)  
-2. Veja no painel os resultados de IR, projeções e renda perpétua (nominal e real).
+   - **Renda Bruta Anual**  
+   - **Percentual de aporte em PGBL (0–12%)**  
+   - **Taxa de retorno esperada**  
+   - **Prazo de projeção (anos)**  
+   - **Frequência de aporte** (Anual ou Mensal)  
+   - **Para renda perpétua real**: informe a inflação anual (em %)  
+2. Veja no painel:
+   - **IR sem PGBL**, **IR com PGBL a 12%**, **IR com PGBL ao % escolhido**  
+   - **Evolução ano a ano** de saldos (PGBL vs Outros) e **Economia de IR anual**  
+   - **Saques anuais FIFO** distribuídos ao longo de M anos (ajustados conforme instruções)  
+   - **Economia de IR Acumulada** (bruta e líquida ao final)  
+   - **Renda Perpétua Real** (em valores de hoje)
 
 ## Arquivos
 
 - `app.py` – Código completo do simulador em Streamlit.  
-- `requirements.txt` – Dependências: Streamlit, Pandas, NumPy.  
-- `README.md` – Este arquivo de descrição e instruções.
+- `requirements.txt` – Lista de dependências: Streamlit, Pandas, NumPy.  
+- `README.md` – Este arquivo de instruções e descrição.
 
 ## Licença
 
