@@ -85,7 +85,7 @@ def calcula_irpf_anual(renda):
     aliquota_ef = (imposto / renda * 100) if renda > 0 else 0.0
     return imposto, aliquota_ef
 
-# Aplicar come-cotas semestral: desconta 15% de IR sobre rendimento semestral
+# Aplica come-cotas semestral: desconta 15% de IR sobre rendimento semestral
 def aplica_come_cotas_semestre(valor_acumulado, taxa_anual):
     prev = valor_acumulado
     valor_semestral = valor_acumulado * (1 + taxa_anual) ** 0.5
@@ -138,33 +138,39 @@ if btn_calcular:
             valor_pgbl[idx] = 0.0
             continue
         valor_pgbl[idx] = valor_pgbl[idx - 1] * (1 + taxa_nominal / 100.0) ** dt
-        # aportes
+        # aportes no PGBL
         mask = np.isclose(df_contribs["ano"], t, atol=1e-6)
         if mask.any():
             valor_pgbl[idx] += df_contribs.loc[mask, "aporte"].sum()
 
-    # Calcula valor bruto final do PGBL
     valor_final_pgbl = valor_pgbl[-1]
 
-    # Simular Fundo LP com come-cotas semestrais e aportes de restituição
+    # Simular Fundo LP em semestres
     restit_ano = valor_aporte_anual * 0.275
-
     semestres = int(anos_aporte * 2)
     valor_lp = 0.0
+    lp_sem_vals = [valor_lp]
     for k in range(1, semestres + 1):
-        # crescimento semestral + come-cotas
         valor_lp = aplica_come_cotas_semestre(valor_lp, taxa_fundo / 100.0)
         if k % 2 == 0:
             ano_corrente = k // 2
             if 1 <= ano_corrente <= (anos_aporte - 1):
                 valor_lp += restit_ano
+        lp_sem_vals.append(valor_lp)
 
-    valor_final_fundo = valor_lp
+    # Criar vetor de valor_lp no mesmo timeline (forward-fill semestral)
+    valor_lp_timeline = np.zeros(len(timeline))
+    for idx, t in enumerate(timeline):
+        sem_atual = int(np.floor(t * 2))
+        valor_lp_timeline[idx] = lp_sem_vals[sem_atual]
 
-    # Exibição dos resultados
+    valor_final_fundo = valor_lp_timeline[-1]
+
+    # Exibição do gráfico com PGBL e Fundo LP
     st.subheader("Evolução Bruta ao Longo do Tempo")
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(timeline, valor_pgbl, label="PGBL (Bruto)")
+    ax.plot(timeline, valor_lp_timeline, label="Fundo LP (Bruto)", linestyle="--")
     ax.set_xlabel("Anos")
     ax.set_ylabel("Valor Acumulado (R$)")
     ax.legend()
@@ -184,11 +190,12 @@ if btn_calcular:
         valor_real_fundo = valor_final_fundo / ((1 + inflacao / 100.0) ** anos_aporte)
         st.write(f"- Valor futuro no Fundo LP descontado da inflação: R$ {valor_real_fundo:,.2f}")
 
-    # Resgates
+    # Resgates (valor vitalício considera apenas o PGBL, não o Fundo LP)
     if modo_resgate == "Renda Vitalícia (mensal)":
         taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
         renda_mensal = valor_real_pgbl * taxa_real / 12.0
         st.write(f"- Renda vitalícia mensal estimada (em R$ de hoje): R$ {renda_mensal:,.2f}")
+        st.markdown("_Observação: a renda vitalícia mensal é calculada apenas com o valor do PGBL, sem considerar o saldo do Fundo LP._")
     elif modo_resgate.startswith("Resgate Mensal"):
         prazo_meses = anos_resgate * 12
         taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
