@@ -25,7 +25,7 @@ modo_aporte = st.sidebar.selectbox("Modalidade de aporte", ["Único Anual", "Men
 # 1.4 Prazo total de aportes (anos)
 anos_aporte = st.sidebar.number_input("Prazo de aportes (anos)", min_value=1, max_value=50, value=20, step=1)
 
-# 1.5 Prazo de resgate (anos)
+# 1.5 Prazo de resgate (anos) para cálculo de resgate por prazo
 anos_resgate = st.sidebar.number_input("Prazo de resgate (anos)", min_value=1, max_value=50, value=30, step=1)
 
 # 1.6 Inflação estimada anual (%)
@@ -37,7 +37,7 @@ taxa_nominal = st.sidebar.number_input("Taxa nominal anual (%) (PGBL)", min_valu
 # 1.8 Taxa nominal de retorno (%) para fundo de longo prazo
 taxa_fundo = st.sidebar.number_input("Taxa nominal anual (%) (Fundo Longo Prazo)", min_value=0.0, format="%.2f", value=10.0, step=0.1)
 
-# 1.9 Tabela regressiva de IR do PGBL (para cálculo de IR sem PGBL)
+# 1.9 Tabela regressiva de IRPF
 st.sidebar.markdown("#### Tabela Regressiva (IRPF)")
 tabela_irpf = [
     (0.0, 22847.76, 0.0, 0.0),
@@ -46,16 +46,6 @@ tabela_irpf = [
     (45012.61, 55976.16, 0.225, 7633.51),
     (55976.17, 1e12, 0.275, 10432.32),
 ]
-
-# 1.10 Modo de resgate pós-acumulação
-st.sidebar.markdown("#### Modo de Resgate")
-modo_resgate = st.sidebar.selectbox(
-    "Selecione modo de resgate:",
-    [
-        "Renda Vitalícia (mensal)",
-        f"Resgate Mensal por {anos_resgate} anos"
-    ]
-)
 
 st.sidebar.markdown("---")
 btn_calcular = st.sidebar.button("Calcular Simulação")
@@ -119,7 +109,7 @@ if btn_calcular:
 
     # 3.1 Cálculo do IR sem PGBL
     imposto_sem_pgbl, aliq_ef_sem = calcula_irpf_anual(renda_bruta)
-    st.write(f"- Alíquota de IR sem PGBL: {aliq_ef_sem:.2f}%")
+    st.write(f"- Alíquota efetiva de IR sem aporte no PGBL: {aliq_ef_sem:.2f}%")
     st.write(f"- IR devido sem PGBL (anual): R$ {imposto_sem_pgbl:,.2f}")
 
     # 3.2 Converte perc_pct para fração e calcula aporte anual
@@ -128,11 +118,13 @@ if btn_calcular:
     # IR após aporte: IR reduzido pela restituição (aporte * 27.5%)
     restit_anual = aporte_anual * 0.275
     ir_apos_aporte = max(imposto_sem_pgbl - restit_anual, 0.0)
+    aliq_ef_com_pgbl = (ir_apos_aporte / renda_bruta) * 100 if renda_bruta > 0 else 0.0
     st.write(f"- IR devido após PGBL (anual): R$ {ir_apos_aporte:,.2f}")
+    st.write(f"- Alíquota efetiva de IR após aporte no PGBL: {aliq_ef_com_pgbl:.2f}%")
 
     # Total de imposto economizado ao longo dos anos de aporte
     total_restit = restit_anual * (anos_aporte - 1)
-    st.write(f"- Imposto total economizado durante aportes: R$ {total_restit:,.2f}")
+    st.write(f"- Imposto total economizado durante {anos_aporte} anos de aporte: R$ {total_restit:,.2f}")
 
     # 3.3 Simulação do PGBL (composto mensal + aporte anual no final de cada ano)
     resolucao = 12
@@ -205,11 +197,13 @@ if btn_calcular:
     # 3.7 Projeção de Resgate
     st.subheader("Projeção de Resgate")
 
+    # Taxas reais mensais
     taxa_real_ano       = (1 + taxa_nominal/100.0) / (1 + inflacao/100.0) - 1
     taxa_real_mensal    = (1 + taxa_real_ano) ** (1/12) - 1
     taxa_real_lp_ano    = (1 + taxa_fundo/100.0) / (1 + inflacao/100.0) - 1
     taxa_real_lp_mensal = (1 + taxa_real_lp_ano) ** (1/12) - 1
 
+    # 3.7.1 Saque mensal por prazo (30 anos)
     meses_resgate = int(anos_resgate * 12)
     saque_mensal_real = calcula_saque_mensal(
         total_lp=valor_lp_real,
@@ -218,13 +212,8 @@ if btn_calcular:
         taxa_real_pgbl_mensal=taxa_real_mensal,
         meses=meses_resgate
     )
-
-    st.write(f"- Valor acumulado no PGBL (nominal): R$ {valor_final_pgbl_nom:,.2f}")
-    st.write(f"- Valor acumulado no Fundo LP (nominal): R$ {valor_final_lp_nom:,.2f}")
-    st.write(f"- Valor real no PGBL (hoje): R$ {valor_pgbl_real:,.2f}")
-    st.write(f"- Valor real no Fundo LP (hoje): R$ {valor_lp_real:,.2f}")
     st.write(f"- Saque mensal constante por {anos_resgate} anos (valor real): R$ {saque_mensal_real:,.2f}")
 
-    # Renda Vitalícia (perpétua)
+    # 3.7.2 Renda vitalícia (perpétua)
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
     st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
