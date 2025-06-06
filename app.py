@@ -195,6 +195,7 @@ if btn_calcular:
     st.pyplot(fig)
 
     # 3.7 Projeção de Resgate
+
     st.subheader("Projeção de Resgate")
 
     # Taxas reais mensais
