@@ -197,9 +197,9 @@ if btn_calcular:
     st.write(f"- Valor acumulado no PGBL (nominal): R$ {valor_final_pgbl_nom:,.2f}")
     st.write(f"- Valor acumulado no Fundo LP (nominal): R$ {valor_final_lp_nom:,.2f}")
     st.write(f"- Valor real no PGBL (hoje): R$ {valor_pgbl_real:,.2f}")
-    st.write(f("- Valor real no Fundo LP (hoje): R$ {valor_lp_real:,.2f}")
-    st.write(f("- Saque mensal constante por {anos_resgate} anos (valor real): R$ {saque_mensal_real:,.2f}")
+    st.write(f"- Valor real no Fundo LP (hoje): R$ {valor_lp_real:,.2f}")
+    st.write(f"- Saque mensal constante por {anos_resgate} anos (valor real): R$ {saque_mensal_real:,.2f}")
 
     # 3.7 Renda Vitalícia (opcional)
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
-    st.write(f("- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
+    st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
