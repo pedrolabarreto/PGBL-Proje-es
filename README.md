@@ -1,7 +1,7 @@
+
 # Simulador de PGBL
 
-Este repositório contém um app em Streamlit para simular aportes em PGBL, 
-calcular economia de IR, projetar evolução de capital e simular resgates.
+Este repositório contém um app em Streamlit para simular aportes em PGBL, calcular economia de IR, projetar evolução de capital e simular resgates.
 
 ## Como usar
 
