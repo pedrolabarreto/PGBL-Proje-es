@@ -148,19 +148,23 @@ def calcula_saque_mensal(total_lp, total_pgbl, taxa_real_lp_mensal, taxa_real_pg
 if btn_calcular:
     st.header("Resultados da Simulação")
 
+    # IR sem PGBL
     imposto_sem_pgbl, aliq_ef_sem = calcula_irpf_anual(renda_bruta)
     st.write(f"- Alíquota efetiva de IR sem aporte no PGBL: {aliq_ef_sem:.2f}%")
     st.write(f"- IR devido sem PGBL (anual): R$ {imposto_sem_pgbl:,.2f}")
 
+    # Aporte e IR pós-aporte
     aporte_anual = renda_bruta * (perc_pct / 100.0)
     restit_anual = aporte_anual * 0.275
     ir_apos_aporte = max(imposto_sem_pgbl - restit_anual, 0.0)
     aliq_ef_com_pgbl = (ir_apos_aporte / renda_bruta) * 100 if renda_bruta > 0 else 0.0
     st.write(f"- IR devido após PGBL (anual): R$ {ir_apos_aporte:,.2f}")
-    st.write(f"- Alíquota efetiva de IR após aporte no PGBL: {aliq_ef_com_pgbl:.2f}")
+    st.write(f"- Alíquota efetiva de IR após aporte no PGBL: {aliq_ef_com_pgbl:.2f}%")
+
     total_restit = restit_anual * anos_aporte
     st.write(f"- Imposto total economizado durante {anos_aporte} anos de aporte: R$ {total_restit:,.2f}")
 
+    # PGBL nominal
     resolucao = 12
     dt = 1 / resolucao
     timeline = np.arange(0, anos_aporte + dt, dt)
@@ -169,18 +173,19 @@ if btn_calcular:
         if idx == 0:
             valor_pgbl[idx] = 0.0
         else:
-            valor_pgbl[idx] = valor_pgbl[idx - 1] * (1 + taxa_nominal / 100.0) ** dt
+            valor_pgbl[idx] = valor_pgbl[idx - 1] * (1 + taxa_nominal/100.0) ** dt
             if abs(t - round(t)) < 1e-8 and 1 <= int(round(t)) <= anos_aporte:
                 valor_pgbl[idx] += aporte_anual
     valor_final_pgbl_nom = valor_pgbl[-1]
 
+    # LP nominal
     semestres = anos_aporte * 2
     valor_lp = 0.0
     lp_sem_vals = [valor_lp]
     cap_12 = renda_bruta * 0.12
 
     for k in range(1, semestres + 1):
-        valor_lp = aplica_come_cotas_semestre(valor_lp, taxa_fundo / 100.0)
+        valor_lp = aplica_come_cotas_semestre(valor_lp, taxa_fundo/100.0)
         if k % 2 == 0:
             ano_corrente = k // 2
             if 1 <= ano_corrente <= anos_aporte - 1:
@@ -208,7 +213,8 @@ if btn_calcular:
     st.write(f"- Valor acumulado no PGBL (nominal): R$ {valor_final_pgbl_nom:,.2f}")
     st.write(f"- Valor acumulado no Fundo LP (nominal): R$ {valor_final_lp_nom:,.2f}")
 
-    fator_inflacao = (1 + inflacao / 100.0) ** anos_aporte
+    # Ajuste real e gráfico
+    fator_inflacao = (1 + inflacao/100.0) ** anos_aporte
     valor_pgbl_real = valor_final_pgbl_nom / fator_inflacao
     valor_lp_real = valor_final_lp_nom / fator_inflacao
 
@@ -222,11 +228,12 @@ if btn_calcular:
     ax.grid(True)
     st.pyplot(fig)
 
+    # Resgate
     st.subheader("Projeção de Resgate")
-    taxa_real_ano = (1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0) - 1
-    taxa_real_mensal = (1 + taxa_real_ano) ** (1 / 12) - 1
-    taxa_real_lp_ano = (1 + taxa_fundo / 100.0) / (1 + inflacao / 100.0) - 1
-    taxa_real_lp_mensal = (1 + taxa_real_lp_ano) ** (1 / 12) - 1
+    taxa_real_ano = (1 + taxa_nominal/100.0) / (1 + inflacao/100.0) - 1
+    taxa_real_mensal = (1 + taxa_real_ano) ** (1/12) - 1
+    taxa_real_lp_ano = (1 + taxa_fundo/100.0) / (1 + inflacao/100.0) - 1
+    taxa_real_lp_mensal = (1 + taxa_real_lp_ano) ** (1/12) - 1
 
     meses_resgate = int(anos_resgate * 12)
     saque_mensal_real = calcula_saque_mensal(
@@ -241,6 +248,7 @@ if btn_calcular:
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
     st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
 
+    # Benefício Fiscal Real
     r = taxa_nominal / 100.0
     A = aporte_anual * 0.275
     fv_restits = sum(A * (1 + r) ** k for k in range(0, anos_aporte))

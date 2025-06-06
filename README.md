@@ -26,7 +26,7 @@ Este é um simulador de Plano Gerador de Benefício Livre (PGBL) em Python, inte
 
 ## Estrutura de arquivos
 
-- `app.py`: Lógica completa do simulador.
+- `app.py`: Versão v12 atualizada com correção do símbolo '%' na alíquota.
 - `requirements.txt`: Dependências Python.
 - `README.md`: Este arquivo de instruções.
 
