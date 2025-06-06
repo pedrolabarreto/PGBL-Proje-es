@@ -35,7 +35,7 @@ inflacao = st.sidebar.number_input("Inflação estimada anual (%)", min_value=0.
 taxa_nominal = st.sidebar.number_input("Taxa nominal anual (%) (PGBL)", min_value=0.0, format="%.2f", value=6.0, step=0.1)
 
 # 1.8 Taxa nominal de retorno (%) para fundo de longo prazo (se houver)
-taxa_fundo = st.sidebar.number_input("Taxa nominal anual (%) (Fundo Longo Prazo)", min_value=0.0, format="%.2f", value=6.0, step=0.1)
+taxa_fundo = st.sidebar.number_input("Taxa nominal anual (%) (Fundo Longo Prazo)", min_value=0.0, format="%.2f", value=10.0, step=0.1)
 
 # 1.9 Tabela regressiva de IR do PGBL
 st.sidebar.markdown("#### Tabela Regressiva (PGBL)")
@@ -85,19 +85,13 @@ def calcula_irpf_anual(renda):
     aliquota_ef = (imposto / renda * 100) if renda > 0 else 0.0
     return imposto, aliquota_ef
 
-def aplica_come_cotas(valor_acumulado, taxa_anual, periodos=1):
-    for _ in range(periodos):
-        rend_sem = valor_acumulado * ((1 + taxa_anual) ** 0.5 - 1)
-        ir_sem = rend_sem * 0.15
-        valor_acumulado = valor_acumulado + rend_sem - ir_sem
-    return valor_acumulado
-
-def aliquota_regressiva(anos):
-    for faixa in tabela_regressiva:
-        a_inf, a_sup, aliq = faixa
-        if anos >= a_inf and anos < a_sup:
-            return aliq / 100.0
-    return tabela_regressiva[-1][2] / 100.0
+# Aplicar come-cotas semestral: desconta 15% de IR sobre rendimento semestral
+def aplica_come_cotas_semestre(valor_acumulado, taxa_anual):
+    prev = valor_acumulado
+    valor_semestral = valor_acumulado * (1 + taxa_anual) ** 0.5
+    ganho = valor_semestral - prev
+    ir_sem = ganho * 0.15
+    return valor_semestral - ir_sem
 
 ########################
 # 3. Cálculo principal
@@ -117,99 +111,65 @@ if btn_calcular:
     st.subheader("Valores de Aporte")
     st.write(f"- Valor anual a aportar no PGBL: R$ {valor_aporte_anual:,.2f}")
 
-    # Definir cronograma de aportes
+    # Definir cronograma de aportes (apenas para PGBL)
     contribs = []
     if modo_aporte == "Único Anual":
-        for i in range(int(anos_aporte)):
+        for i in range(1, int(anos_aporte) + 1):
             contribs.append((i, valor_aporte_anual))
     else:
         valor_mensal = valor_aporte_anual / 12.0
         total_meses = int(anos_aporte * 12)
-        for m in range(total_meses):
-            ano_rel = m / 12.0
-            contribs.append((ano_rel, valor_mensal))
+        for m in range(1, total_meses + 1):
+            contribs.append((m / 12.0, valor_mensal))
 
     df_contribs = pd.DataFrame(contribs, columns=["ano", "aporte"])
     total_investido = df_contribs["aporte"].sum()
     st.write(f"- Total investido ao longo de {anos_aporte} anos: R$ {total_investido:,.2f}")
 
-    # Simular acumulação
+    # Simular PGBL mensalmente
     resolucao = 12
     dt = 1 / resolucao
 
     timeline = np.arange(0, anos_aporte + dt, dt)
     valor_pgbl = np.zeros(len(timeline))
-    valor_fundo_lp = np.zeros(len(timeline))
-
-    # ← Ajuste AQUI: usar restituição de 27,5% sobre todo o aporte anual
-    restit_por_ano = {}
-    for ano_int in range(int(anos_aporte)):
-        aliquota_marginal = 0.275
-        imposto_economizado = valor_aporte_anual * aliquota_marginal
-        restit_por_ano[ano_int + 1] = imposto_economizado
-
-    def preenchimento_pgbl_no_ano(ano):
-        soma = 0.0
-        for (a, v) in contribs:
-            if a < ano:
-                soma += v
-        return soma
 
     for idx, t in enumerate(timeline):
         if idx == 0:
             valor_pgbl[idx] = 0.0
-            valor_fundo_lp[idx] = 0.0
             continue
-
         valor_pgbl[idx] = valor_pgbl[idx - 1] * (1 + taxa_nominal / 100.0) ** dt
-        valor_fundo_lp[idx] = valor_fundo_lp[idx - 1] * (1 + taxa_fundo / 100.0) ** dt
-
-        # a) aportes no PGBL
+        # aportes
         mask = np.isclose(df_contribs["ano"], t, atol=1e-6)
         if mask.any():
-            soma_aporte = df_contribs.loc[mask, "aporte"].sum()
-            valor_pgbl[idx] += soma_aporte
+            valor_pgbl[idx] += df_contribs.loc[mask, "aporte"].sum()
 
-        # b) restituição de IR no início de cada ano inteiro
-        ano_atual_int = int(np.floor(t))
-        if abs(t - ano_atual_int) < 1e-6 and ano_atual_int in restit_por_ano:
-            restit = restit_por_ano[ano_atual_int]
-            if perc_pct < 12.0:
-                total_aportado_ate_hoje = preenchimento_pgbl_no_ano(ano_atual_int)
-                capacidade_pgbl = renda_bruta * 0.12
-                espaco_pgbl = max(capacidade_pgbl - total_aportado_ate_hoje, 0.0)
-                if restit <= espaco_pgbl:
-                    valor_pgbl[idx] += restit
-                else:
-                    valor_pgbl[idx] += espaco_pgbl
-                    sobra = restit - espaco_pgbl
-                    valor_fundo_lp[idx] += sobra
-            else:
-                valor_fundo_lp[idx] += restit
+    # Calcula valor bruto final do PGBL
+    valor_final_pgbl = valor_pgbl[-1]
 
-        # c) come-cotas (aplicado apenas no fundo de longo prazo)
-        mes_rel = (t * 12) % 12
-        if abs(mes_rel - 4) < 1e-3 or abs(mes_rel - 10) < 1e-3:
-            valor_fundo_lp[idx] = aplica_come_cotas(valor_fundo_lp[idx], taxa_fundo / 100.0, periodos=1)
+    # Simular Fundo LP com come-cotas semestrais e aportes de restituição
+    restit_ano = valor_aporte_anual * 0.275
 
-    df_evol = pd.DataFrame({
-        "Ano": timeline,
-        "PGBL_Bruto": valor_pgbl,
-        "Fundo_LP_Bruto": valor_fundo_lp
-    })
+    semestres = int(anos_aporte * 2)
+    valor_lp = 0.0
+    for k in range(1, semestres + 1):
+        # crescimento semestral + come-cotas
+        valor_lp = aplica_come_cotas_semestre(valor_lp, taxa_fundo / 100.0)
+        if k % 2 == 0:
+            ano_corrente = k // 2
+            if 1 <= ano_corrente <= (anos_aporte - 1):
+                valor_lp += restit_ano
 
+    valor_final_fundo = valor_lp
+
+    # Exibição dos resultados
     st.subheader("Evolução Bruta ao Longo do Tempo")
     fig, ax = plt.subplots(figsize=(8, 5))
-    ax.plot(df_evol["Ano"], df_evol["PGBL_Bruto"], label="PGBL (Bruto)")
-    ax.plot(df_evol["Ano"], df_evol["Fundo_LP_Bruto"], label="Fundo LP (Bruto)")
+    ax.plot(timeline, valor_pgbl, label="PGBL (Bruto)")
     ax.set_xlabel("Anos")
     ax.set_ylabel("Valor Acumulado (R$)")
     ax.legend()
     ax.grid(True)
     st.pyplot(fig)
-
-    valor_final_pgbl = valor_pgbl[-1]
-    valor_final_fundo = valor_fundo_lp[-1]
 
     st.subheader("Projeção de Resgate")
 
@@ -224,6 +184,7 @@ if btn_calcular:
         valor_real_fundo = valor_final_fundo / ((1 + inflacao / 100.0) ** anos_aporte)
         st.write(f"- Valor futuro no Fundo LP descontado da inflação: R$ {valor_real_fundo:,.2f}")
 
+    # Resgates
     if modo_resgate == "Renda Vitalícia (mensal)":
         taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
         renda_mensal = valor_real_pgbl * taxa_real / 12.0
@@ -244,17 +205,6 @@ if btn_calcular:
             "_Observação: dependendo da ordem cronológica dos aportes, parte do capital resgatado poderá ter tempo de permanência menor que 10 anos, gerando alíquotas superiores a 10% no IR regressivo._"
         )
 
-    imposto_economizado_total = sum(restit_por_ano.values())
-    ir_com_pgbl = imposto_sem_pgbl - imposto_economizado_total
-    aliq_ef_com_pgbl = (ir_com_pgbl / renda_bruta * 100) if renda_bruta > 0 else 0.0
-
+    imposto_economizado_total = restit_ano * (anos_aporte - 1)
     st.subheader("Economia Fiscal")
     st.write(f"- Imposto economizado ao longo do período: R$ {imposto_economizado_total:,.2f}")
-    st.write(f"- IR devido após restituições (anual): R$ {ir_com_pgbl:,.2f}")
-    st.write(f"- Alíquota efetiva após PGBL: {aliq_ef_com_pgbl:.2f}%")
-
-    if st.checkbox("Mostrar tabela detalhada de evolução"):
-        df_exibir = df_evol.copy()
-        df_exibir["PGBL_Bruto"] = df_exibir["PGBL_Bruto"].round(2)
-        df_exibir["Fundo_LP_Bruto"] = df_exibir["Fundo_LP_Bruto"].round(2)
-        st.dataframe(df_exibir)
