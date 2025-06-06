@@ -93,6 +93,36 @@ def aplica_come_cotas_semestre(valor_acumulado, taxa_anual):
     ir_sem = ganho * 0.15
     return valor_semestral - ir_sem
 
+def calcula_saque_mensal(total_lp, total_pgbl, taxa_real_lp, taxa_real_pgbl, meses):
+    # Usa método de busca binária para encontrar saque mensal constante que zera saldo após "meses"
+    def simula(saque):
+        saldo_lp = total_lp
+        saldo_pgbl = total_pgbl
+        for i in range(meses):
+            # cresce real
+            saldo_lp = saldo_lp * (1 + taxa_real_lp)
+            saldo_pgbl = saldo_pgbl * (1 + taxa_real_pgbl)
+            # saque
+            if saldo_lp >= saque:
+                saldo_lp -= saque
+            else:
+                rem = saque - saldo_lp
+                saldo_lp = 0.0
+                saldo_pgbl = max(saldo_pgbl - rem, 0.0)
+        return saldo_lp + saldo_pgbl
+
+    # Buscar saque entre 0 e total/meses * 2
+    low = 0.0
+    high = (total_lp + total_pgbl) / meses * 2
+    for _ in range(50):
+        mid = (low + high) / 2
+        rem = simula(mid)
+        if rem > 0:
+            low = mid
+        else:
+            high = mid
+    return (low + high) / 2
+
 ########################
 # 3. Cálculo principal
 ########################
@@ -182,31 +212,55 @@ if btn_calcular:
     # PGBL
     st.write(f"- Valor acumulado no PGBL (bruto): R$ {valor_final_pgbl:,.2f}")
     valor_real_pgbl = valor_final_pgbl / ((1 + inflacao / 100.0) ** anos_aporte)
-    st.write(f"- Valor futuro no PGBL descontado da inflação: R$ {valor_real_pgbl:,.2f}")
 
     # Fundo LP
+    valor_real_fundo = valor_final_fundo / ((1 + inflacao / 100.0) ** anos_aporte)
+
+    # Mostrar valores brutos e reais
+    st.write(f"- Valor futuro no PGBL descontado da inflação: R$ {valor_real_pgbl:,.2f}")
     if valor_final_fundo > 0:
         st.write(f"- Valor acumulado no Fundo LP (bruto): R$ {valor_final_fundo:,.2f}")
-        valor_real_fundo = valor_final_fundo / ((1 + inflacao / 100.0) ** anos_aporte)
         st.write(f"- Valor futuro no Fundo LP descontado da inflação: R$ {valor_real_fundo:,.2f}")
 
-    # Resgates (valor vitalício considera apenas o PGBL, não o Fundo LP)
+    # Resgates
     if modo_resgate == "Renda Vitalícia (mensal)":
-        taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
-        renda_mensal = valor_real_pgbl * taxa_real / 12.0
-        st.write(f"- Renda vitalícia mensal estimada (em R$ de hoje): R$ {renda_mensal:,.2f}")
-        st.markdown("_Observação: a renda vitalícia mensal é calculada apenas com o valor do PGBL, sem considerar o saldo do Fundo LP._")
+        # calcular taxa real mensal para LP e PGBL
+        taxa_real_pgbl_ano = (1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0) - 1
+        taxa_real_fundo_ano = (1 + taxa_fundo / 100.0) / (1 + inflacao / 100.0) - 1
+        taxa_real_pgbl_mensal = (1 + taxa_real_pgbl_ano) ** (1/12) - 1
+        taxa_real_fundo_mensal = (1 + taxa_real_fundo_ano) ** (1/12) - 1
+
+        meses = int(anos_resgate * 12)
+        saque_mensal = calcula_saque_mensal(
+            total_lp=valor_real_fundo,
+            total_pgbl=valor_real_pgbl,
+            taxa_real_lp=taxa_real_fundo_mensal,
+            taxa_real_pgbl=taxa_real_pgbl_mensal,
+            meses=meses
+        )
+        st.write(f"- Renda vitalícia mensal estimada (em R$ de hoje): R$ {saque_mensal:,.2f}")
+        st.markdown("_Observação: a renda vitalícia mensal considera primeiro o saldo do Fundo LP e depois do PGBL._")
+
     elif modo_resgate.startswith("Resgate Mensal"):
-        prazo_meses = anos_resgate * 12
-        taxa_real = ((1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0)) - 1
-        if taxa_real == 0:
-            saque_mensal = valor_real_pgbl / prazo_meses
-        else:
-            j = (1 + taxa_real) ** (1 / 12) - 1
-            saque_mensal = valor_real_pgbl * j / (1 - (1 + j) ** (-prazo_meses))
+        # similar à renda vitalícia, mas resgate por anos especificados
+        taxa_real_pgbl_ano = (1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0) - 1
+        taxa_real_fundo_ano = (1 + taxa_fundo / 100.0) / (1 + inflacao / 100.0) - 1
+        taxa_real_pgbl_mensal = (1 + taxa_real_pgbl_ano) ** (1/12) - 1
+        taxa_real_fundo_mensal = (1 + taxa_real_fundo_ano) ** (1/12) - 1
+
+        meses = int(anos_resgate * 12)
+        saque_mensal = calcula_saque_mensal(
+            total_lp=valor_real_fundo,
+            total_pgbl=valor_real_pgbl,
+            taxa_real_lp=taxa_real_fundo_mensal,
+            taxa_real_pgbl=taxa_real_pgbl_mensal,
+            meses=meses
+        )
         st.write(f"- Saque mensal constante por {anos_resgate} anos: R$ {saque_mensal:,.2f}")
+
     else:
-        saque_anual = valor_real_pgbl / anos_resgate
+        # Resgates anuais sem simulação complexa, apenas soma valores reais e divide
+        saque_anual = (valor_real_pgbl + valor_real_fundo) / anos_resgate
         st.write(f"- Saque anual por {anos_resgate} anos: R$ {saque_anual:,.2f}")
         st.markdown(
             "_Observação: dependendo da ordem cronológica dos aportes, parte do capital resgatado poderá ter tempo de permanência menor que 10 anos, gerando alíquotas superiores a 10% no IR regressivo._"
