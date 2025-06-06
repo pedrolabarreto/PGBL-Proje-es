@@ -13,15 +13,72 @@ st.title("Simulador de PGBL")
 
 st.sidebar.header("Parâmetros de Entrada")
 
-renda_bruta = st.sidebar.number_input("Renda Bruta Anual (R$)", min_value=0.0, format="%.2f", step=1000.0)
-perc_pct = st.sidebar.slider("Percentual a aportar (% da renda bruta)", 0.0, 12.0, 10.0, 0.1)
-modo_aporte = st.sidebar.selectbox("Modalidade de aporte", ["Único Anual", "Mensal (dividido por 12)"])
-anos_aporte = st.sidebar.number_input("Prazo de aportes (anos)", min_value=1, max_value=50, value=20, step=1)
-anos_resgate = st.sidebar.number_input("Prazo de resgate (anos)", min_value=1, max_value=50, value=30, step=1)
-inflacao = st.sidebar.number_input("Inflação estimada anual (%)", min_value=0.0, format="%.2f", value=4.0, step=0.1)
-taxa_nominal = st.sidebar.number_input("Taxa nominal anual (%) (PGBL)", min_value=0.0, format="%.2f", value=10.0, step=0.1)
-taxa_fundo = st.sidebar.number_input("Taxa nominal anual (%) (Fundo Longo Prazo)", min_value=0.0, format="%.2f", value=10.0, step=0.1)
+# 1.1 Renda bruta anual
+renda_bruta = st.sidebar.number_input(
+    "Renda Bruta Anual (R$)",
+    min_value=0.0,
+    format="%.2f",
+    step=1000.0
+)
 
+# 1.2 Percentual de aporte (0% a 12%)
+perc_pct = st.sidebar.slider(
+    "Percentual a aportar (% da renda bruta)",
+    0.0, 12.0, 10.0, 0.1
+)
+
+# 1.3 Modalidade de aporte
+modo_aporte = st.sidebar.selectbox(
+    "Modalidade de aporte",
+    ["Único Anual", "Mensal (dividido por 12)"]
+)
+
+# 1.4 Prazo total de aportes (anos)
+anos_aporte = st.sidebar.number_input(
+    "Prazo de aportes (anos)",
+    min_value=1,
+    max_value=50,
+    value=20,
+    step=1
+)
+
+# 1.5 Prazo de resgate (anos) para cálculo de resgate por prazo
+anos_resgate = st.sidebar.number_input(
+    "Prazo de resgate (anos)",
+    min_value=1,
+    max_value=50,
+    value=30,
+    step=1
+)
+
+# 1.6 Inflação estimada anual (%)
+inflacao = st.sidebar.number_input(
+    "Inflação estimada anual (%)",
+    min_value=0.0,
+    format="%.2f",
+    value=4.0,
+    step=0.1
+)
+
+# 1.7 Taxa nominal de retorno (PGBL) anual (%)
+taxa_nominal = st.sidebar.number_input(
+    "Taxa nominal anual (%) (PGBL)",
+    min_value=0.0,
+    format="%.2f",
+    value=10.0,
+    step=0.1
+)
+
+# 1.8 Taxa nominal de retorno (%) para fundo de longo prazo
+taxa_fundo = st.sidebar.number_input(
+    "Taxa nominal anual (%) (Fundo Longo Prazo)",
+    min_value=0.0,
+    format="%.2f",
+    value=10.0,
+    step=0.1
+)
+
+# 1.9 Tabela regressiva de IRPF
 st.sidebar.markdown("#### Tabela Regressiva (IRPF)")
 tabela_irpf = [
     (0.0, 22847.76, 0.0, 0.0),
@@ -30,6 +87,7 @@ tabela_irpf = [
     (45012.61, 55976.16, 0.225, 7633.51),
     (55976.17, 1e12, 0.275, 10432.32),
 ]
+
 st.sidebar.markdown("---")
 btn_calcular = st.sidebar.button("Calcular Simulação")
 
@@ -90,22 +148,19 @@ def calcula_saque_mensal(total_lp, total_pgbl, taxa_real_lp_mensal, taxa_real_pg
 if btn_calcular:
     st.header("Resultados da Simulação")
 
-    # IR sem PGBL
     imposto_sem_pgbl, aliq_ef_sem = calcula_irpf_anual(renda_bruta)
     st.write(f"- Alíquota efetiva de IR sem aporte no PGBL: {aliq_ef_sem:.2f}%")
     st.write(f"- IR devido sem PGBL (anual): R$ {imposto_sem_pgbl:,.2f}")
 
-    # Aporte e IR após
     aporte_anual = renda_bruta * (perc_pct / 100.0)
     restit_anual = aporte_anual * 0.275
     ir_apos_aporte = max(imposto_sem_pgbl - restit_anual, 0.0)
     aliq_ef_com_pgbl = (ir_apos_aporte / renda_bruta) * 100 if renda_bruta > 0 else 0.0
     st.write(f"- IR devido após PGBL (anual): R$ {ir_apos_aporte:,.2f}")
-    st.write(f"- Alíquota efetiva de IR após aporte no PGBL: {aliq_ef_com_pgbl:.2f}%")
+    st.write(f"- Alíquota efetiva de IR após aporte no PGBL: {aliq_ef_com_pgbl:.2f}")
     total_restit = restit_anual * anos_aporte
     st.write(f"- Imposto total economizado durante {anos_aporte} anos de aporte: R$ {total_restit:,.2f}")
 
-    # Simulação PGBL nominal
     resolucao = 12
     dt = 1 / resolucao
     timeline = np.arange(0, anos_aporte + dt, dt)
@@ -119,7 +174,6 @@ if btn_calcular:
                 valor_pgbl[idx] += aporte_anual
     valor_final_pgbl_nom = valor_pgbl[-1]
 
-    # Simulação LP nominal
     semestres = anos_aporte * 2
     valor_lp = 0.0
     lp_sem_vals = [valor_lp]
@@ -150,12 +204,10 @@ if btn_calcular:
         valor_lp_timeline[idx] = lp_sem_vals[sem_atual]
     valor_final_lp_nom = valor_lp_timeline[-1]
 
-    # Exibição BRUTOS
     st.subheader("Valores Brutos Projetados ao Final dos Aportes")
     st.write(f"- Valor acumulado no PGBL (nominal): R$ {valor_final_pgbl_nom:,.2f}")
     st.write(f"- Valor acumulado no Fundo LP (nominal): R$ {valor_final_lp_nom:,.2f}")
 
-    # Ajuste real e gráfico
     fator_inflacao = (1 + inflacao / 100.0) ** anos_aporte
     valor_pgbl_real = valor_final_pgbl_nom / fator_inflacao
     valor_lp_real = valor_final_lp_nom / fator_inflacao
@@ -170,7 +222,6 @@ if btn_calcular:
     ax.grid(True)
     st.pyplot(fig)
 
-    # Projeção resgate
     st.subheader("Projeção de Resgate")
     taxa_real_ano = (1 + taxa_nominal / 100.0) / (1 + inflacao / 100.0) - 1
     taxa_real_mensal = (1 + taxa_real_ano) ** (1 / 12) - 1
@@ -190,30 +241,13 @@ if btn_calcular:
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
     st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
 
-    # Cálculo FV das restituições com tributação correta
     r = taxa_nominal / 100.0
-    cap_12 = renda_bruta * 0.12
-    fv_restits = 0.0
-    for t in range(1, anos_aporte + 1):
-        restit = aporte_anual * 0.275
-        gap_pgbl = max(cap_12 - aporte_anual, 0.0)
-        to_pgbl = min(restit, gap_pgbl)
-        to_lp = restit - to_pgbl
-        # FV parte em PGBL: rende a 10% ao ano até final
-        anos_rend_pgbl = anos_aporte - t
-        fv_restits += to_pgbl * (1 + r) ** anos_rend_pgbl
-        # FV parte em LP: aplicar come-cotas semestrais
-        semis = (anos_aporte - t) * 2
-        val_lp_restit = to_lp
-        for _ in range(semis):
-            val_lp_restit = aplica_come_cotas_semestre(val_lp_restit, taxa_fundo / 100.0)
-        fv_restits += val_lp_restit
-
+    A = aporte_anual * 0.275
+    fv_restits = sum(A * (1 + r) ** k for k in range(0, anos_aporte))
     ir_futuro_principal = (aporte_anual * anos_aporte) * 0.10
     beneficio_fiscal_real = fv_restits - ir_futuro_principal
 
     st.subheader("Benefício Fiscal Real (ao final dos aportes)")
-    st.write(f"- Valor futuro das restituições reinvestidas (com tributação adequada): R$ {fv_restits:,.2f}")
+    st.write(f"- Valor futuro das restituições reinvestidas: R$ {fv_restits:,.2f}")
     st.write(f"- IR futuro sobre o principal aportado (10% de R$ {aporte_anual * anos_aporte:,.2f}): R$ {ir_futuro_principal:,.2f}")
-    st.write(f"- **Benefício Fiscal Real (nominal): R$ {beneficio_fiscal_real:,.2f}**")
-
+    st.write(f"- Benefício Fiscal Real (nominal): R$ {beneficio_fiscal_real:,.2f}")
