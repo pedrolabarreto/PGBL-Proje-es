@@ -37,15 +37,14 @@ taxa_nominal = st.sidebar.number_input("Taxa nominal anual (%) (PGBL)", min_valu
 # 1.8 Taxa nominal de retorno (%) para fundo de longo prazo
 taxa_fundo = st.sidebar.number_input("Taxa nominal anual (%) (Fundo Longo Prazo)", min_value=0.0, format="%.2f", value=10.0, step=0.1)
 
-# 1.9 Tabela regressiva de IR do PGBL (apenas informativa)
-st.sidebar.markdown("#### Tabela Regressiva (PGBL)")
-tabela_regressiva = [
-    (0, 2, 35.0),
-    (2, 4, 30.0),
-    (4, 6, 25.0),
-    (6, 8, 20.0),
-    (8, 10, 15.0),
-    (10, 100, 10.0),
+# 1.9 Tabela regressiva de IR do PGBL (para cálculo de IR sem PGBL)
+st.sidebar.markdown("#### Tabela Regressiva (IRPF)")
+tabela_irpf = [
+    (0.0, 22847.76, 0.0, 0.0),
+    (22847.77, 33919.80, 0.075, 1713.58),
+    (33919.81, 45012.60, 0.15, 4257.57),
+    (45012.61, 55976.16, 0.225, 7633.51),
+    (55976.17, 1e12, 0.275, 10432.32),
 ]
 
 # 1.10 Modo de resgate pós-acumulação
@@ -54,8 +53,7 @@ modo_resgate = st.sidebar.selectbox(
     "Selecione modo de resgate:",
     [
         "Renda Vitalícia (mensal)",
-        f"Resgate Mensal por {anos_resgate} anos",
-        f"Resgates Anuais (parcela em alíquota 10%)"
+        f"Resgate Mensal por {anos_resgate} anos"
     ]
 )
 
@@ -65,6 +63,19 @@ btn_calcular = st.sidebar.button("Calcular Simulação")
 ########################
 # 2. Funções Auxiliares
 ########################
+
+def calcula_irpf_anual(renda):
+    imposto = 0.0
+    aliquota_ef = 0.0
+    for faixa in tabela_irpf:
+        base_inf, base_sup, aliquota, deducao = faixa
+        if renda >= base_inf and renda <= base_sup:
+            imposto = renda * aliquota - deducao
+            break
+    if imposto < 0:
+        imposto = 0.0
+    aliquota_ef = (imposto / renda * 100) if renda > 0 else 0.0
+    return imposto, aliquota_ef
 
 def aplica_come_cotas_semestre(valor_acumulado, taxa_anual):
     prev = valor_acumulado
@@ -106,10 +117,24 @@ def calcula_saque_mensal(total_lp, total_pgbl, taxa_real_lp_mensal, taxa_real_pg
 if btn_calcular:
     st.header("Resultados da Simulação")
 
-    # 3.1 Converte perc_pct para fração e calcula aporte anual
+    # 3.1 Cálculo do IR sem PGBL
+    imposto_sem_pgbl, aliq_ef_sem = calcula_irpf_anual(renda_bruta)
+    st.write(f"- Alíquota de IR sem PGBL: {aliq_ef_sem:.2f}%")
+    st.write(f"- IR devido sem PGBL (anual): R$ {imposto_sem_pgbl:,.2f}")
+
+    # 3.2 Converte perc_pct para fração e calcula aporte anual
     aporte_anual = renda_bruta * (perc_pct / 100.0)
 
-    # 3.2 Simulação do PGBL (composto mensal + aporte anual no final de cada ano)
+    # IR após aporte: IR reduzido pela restituição (aporte * 27.5%)
+    restit_anual = aporte_anual * 0.275
+    ir_apos_aporte = max(imposto_sem_pgbl - restit_anual, 0.0)
+    st.write(f"- IR devido após PGBL (anual): R$ {ir_apos_aporte:,.2f}")
+
+    # Total de imposto economizado ao longo dos anos de aporte
+    total_restit = restit_anual * (anos_aporte - 1)
+    st.write(f"- Imposto total economizado durante aportes: R$ {total_restit:,.2f}")
+
+    # 3.3 Simulação do PGBL (composto mensal + aporte anual no final de cada ano)
     resolucao = 12
     dt = 1 / resolucao
     timeline = np.arange(0, anos_aporte + dt, dt)
@@ -125,16 +150,16 @@ if btn_calcular:
 
     valor_final_pgbl_nom = valor_pgbl[-1]
 
-    # 3.3 Simulação do Fundo LP (semestral + come-cotas + aportes de restituição)
+    # 3.4 Simulação do Fundo LP (semestral + come-cotas + aportes de restituição)
     semestres = anos_aporte * 2
     valor_lp = 0.0
     lp_sem_vals = [valor_lp]
     cap_12       = renda_bruta * 0.12  # teto anual PGBL
 
     for k in range(1, semestres + 1):
-        # 1) rendimento semestral + come-cotas
+        # rendimento semestral + come-cotas
         valor_lp = aplica_come_cotas_semestre(valor_lp, taxa_fundo/100.0)
-        # 2) no final de cada ano (k par), entra restituição:
+        # no final de cada ano (k par), entra restituição:
         if k % 2 == 0:
             ano_corrente = k // 2
             if 1 <= ano_corrente <= anos_aporte - 1:
@@ -145,7 +170,7 @@ if btn_calcular:
                     to_pgbl  = min(restit, gap_pgbl)
                     to_lp    = restit - to_pgbl
                     valor_lp += to_lp
-                    # adicionar “to_pgbl” ao PGBL no índice exato (ano_corrente * resolucao)
+                    # adicionar “to_pgbl” ao PGBL no índice exato
                     idx_target = int(ano_corrente * resolucao)
                     if idx_target < len(valor_pgbl):
                         valor_pgbl[idx_target] += to_pgbl
@@ -161,12 +186,12 @@ if btn_calcular:
 
     valor_final_lp_nom = valor_lp_timeline[-1]
 
-    # 3.4 Ajusta para “valor real”
+    # 3.5 Ajuste para “valor real”
     fator_inflacao = (1 + inflacao/100.0) ** anos_aporte
     valor_pgbl_real = valor_final_pgbl_nom / fator_inflacao
     valor_lp_real   = valor_final_lp_nom / fator_inflacao
 
-    # 3.5 Exibe gráficos de evolução (nominal)
+    # 3.6 Exibe gráficos de evolução (nominal) de PGBL e LP
     st.subheader("Evolução Nominal ao Longo dos 20 Anos")
     fig, ax = plt.subplots(figsize=(8, 5))
     ax.plot(timeline, valor_pgbl,       label="PGBL (Bruto)")
@@ -177,7 +202,7 @@ if btn_calcular:
     ax.grid(True)
     st.pyplot(fig)
 
-    # 3.6 Projeção de Resgate
+    # 3.7 Projeção de Resgate
     st.subheader("Projeção de Resgate")
 
     taxa_real_ano       = (1 + taxa_nominal/100.0) / (1 + inflacao/100.0) - 1
@@ -200,6 +225,6 @@ if btn_calcular:
     st.write(f"- Valor real no Fundo LP (hoje): R$ {valor_lp_real:,.2f}")
     st.write(f"- Saque mensal constante por {anos_resgate} anos (valor real): R$ {saque_mensal_real:,.2f}")
 
-    # 3.7 Renda Vitalícia (opcional)
+    # Renda Vitalícia (perpétua)
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
     st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
