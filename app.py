@@ -177,6 +177,9 @@ if btn_calcular:
         valor_lp_timeline[idx] = lp_sem_vals[sem_atual]
 
     valor_final_lp_nom = valor_lp_timeline[-1]
+    # Exibe valores nominais projetados
+    st.write(f"- Valor acumulado no PGBL (nominal): R$ {valor_final_pgbl_nom:,.2f}")
+    st.write(f"- Valor acumulado no Fundo LP (nominal): R$ {valor_final_lp_nom:,.2f}")
 
     # 3.5 Ajuste para “valor real”
     fator_inflacao = (1 + inflacao/100.0) ** anos_aporte
