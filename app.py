@@ -89,4 +89,4 @@ if btn_calcular:
     ir_futuro = total_principal * 0.10
     st.write(f"- IR futuro sobre principal (10% de R$ {total_principal:,.2f}): R$ {ir_futuro:,.2f}")
     # Efeito final
-    st.write(f"- Efeito final do benefício fiscal: R$ {fv_restits - ir_futuro:,.2f}")
+    st.write(f"- Efeito final do benefício fiscal: R$ {fv_restits - ir_futuro_principal:,.2f}")
