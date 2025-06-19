@@ -157,6 +157,13 @@ if btn_calcular:
     st.write(f"- Saque mensal constante por {anos_resgate} anos (valor real): R$ {saque_mensal_real:,.2f}")
     renda_vitalicia = (valor_pgbl_real * taxa_real_ano + valor_lp_real * taxa_real_lp_ano) / 12.0
     st.write(f"- Renda vitalícia perpétua (valor real/mês): R$ {renda_vitalicia:,.2f}")
+
+    # Seção de Impacto do Benefício Fiscal no Tempo
+    st.subheader("Impacto do benefício fiscal no tempo")
+    st.write(f"- Valor futuro das restituições reinvestidas: R$ {fv_restits:,.2f}")
+    st.write(f"- IR futuro sobre o principal aportado (10% de R$ {total_principal:,.2f}): R$ {ir_futuro_principal:,.2f}")
+    st.write(f"- Efeito final do benefício fiscal: R$ {beneficio_fiscal_real:,.2f}")
+
     fv_restits = fv_pgbl_rest + fv_lp_rest
     ir_futuro_principal = (aporte_anual * anos_aporte) * 0.10
     beneficio_fiscal_real = fv_restits - ir_futuro_principal
