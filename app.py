@@ -6,7 +6,7 @@ from PIL import Image
 
 # Carrega e exibe a logomarca no topo
 logo = Image.open("logo.png")
-st.image(logo, use_column_width=False, width=300)
+st.image(logo, use_container_width=False, width=300)
 
 st.set_page_config(page_title="Simulador de PGBL", layout="wide")
 st.title("Simulador de PGBL")
