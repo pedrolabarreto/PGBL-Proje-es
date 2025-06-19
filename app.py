@@ -162,5 +162,7 @@ if btn_calcular:
     beneficio_fiscal_real = fv_restits - ir_futuro_principal
     st.subheader("Impacto do benefício fiscal no tempo")
     st.write(f"- Valor futuro das restituições reinvestidas: R$ {fv_restits:,.2f}")
-    st.write(f"- IR futuro sobre o principal aportado (10% de R$ {aporte_anual * anos_aporte:,.2f}): R$ {ir_futuro_principal:,.2f}")
+    total_principal = aporte_anual * anos_aporte
+    ir_futuro_principal = total_principal * 0.10
+    st.write(f"- IR futuro sobre o principal aportado (10% de R$ {total_principal:,.2f}): R$ {ir_futuro_principal:,.2f}")
     st.write(f"- Efeito final do benefício fiscal: R$ {beneficio_fiscal_real:,.2f}")
